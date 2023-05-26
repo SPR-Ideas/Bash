@@ -20,7 +20,7 @@ function  install_LAMP() {
         if [ -f "/etc/redhat-release" ] # Checks weather RedHat Based Distro
     then
         sudo yum install php  -y
-        sudo yum install apache2 -y
+        sudo yum install httpd -y
         sudo yum install mysql-server -y
 
     else
@@ -162,9 +162,9 @@ then
 elif [ $1 == "check-app" ]
 then
     test_app
-elif [ $1 == "backup" ]
+elif [ $1 == "backup-db" ]
 then
-    source Backup.sh
+    source Backup.sh >> /opt/backup/backuplog.log 2>&1
 else
     echo "invalid Argument"
 fi
