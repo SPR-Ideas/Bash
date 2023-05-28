@@ -4,33 +4,58 @@
 SAMPLE_APP_REPO="https://github.com/SPR-Ideas/sample-app.git"
 SAMPLE_APP="/tmp/sample-app"
 APP_URL="localhost/php"
+APACHE_2_SERVICE=""
+MYSQL_SERVICE=""
+APPACHE_CONFIG=""
+
+if [ -f "/etc/redhat-release" ]
+then
+    APACHE_2_SERVICE='httpd'
+    MYSQL_SERVICE="mysqld"
+    APPACHE_CONFIG="httpd/conf/httpd.conf"
+else
+    APACHE_2_SERVICE='apache2'
+    MYSQL_SERVICE="mysql"
+    APPACHE_CONFIG="apache2/apache2.conf"
+fi
 
 
 function create_mysql_user(){
+        start_LAMP
         echo "================ CREATING USER FOR MYSQL SERVER ============================"
         read -p "ENTER YOUR USERNAME FOR MYSQL_SERVER : "  USERNAME
         read -s -p "ENTER PASSWORD FOR YOUR USERNAMe  $USERNAME  : " PASSWORD
-        sudo mysql -u root -p -e "CREATE USER '$USERNAME'@'localhost' IDENTIFIED BY '$PASSWORD';"
-        sudo echo "export MYSQL_USERNAME=$USERNAME" |sudo tee -a /etc/apache2/envvars
-        sudo echo "export MYSQL_PASSWORD=$PASSWORD" | sudo tee -a /etc/apache2/envvars
+        sudo mysql -e "CREATE USER '$USERNAME'@'localhost' IDENTIFIED BY '$PASSWORD';"
+        touch "/var/www/html/.htaccess"
+        # sudo echo "export MYSQL_USERNAME=$USERNAME" |sudo tee -a /etc/$APACHE_2_SERVICE/envvars
+        # sudo echo "export MYSQL_PASSWORD=$PASSWORD" | sudo tee -a /etc/$APACHE_2_SERVICE/envvars
+        sudo echo "SetEnv MYSQL_USERNAME $USERNAME" | sudo tee -a /var/www/html/.htaccess
+        sudo echo "SetEnv MYSQL_PASSWORD $PASSWORD" | sudo tee -a /var/www/html/.htaccess
 }
 
 
 function  install_LAMP() {
         if [ -f "/etc/redhat-release" ] # Checks weather RedHat Based Distro
     then
-        sudo yum install php  -y
-        sudo yum install httpd -y
+        sudo yum update
+        sudo yum install php -y
+        sudo yum install php-mysqli  -y
+        sudo yum install $APACHE_2_SERVICE -y
         sudo yum install mysql-server -y
+        sudo mkdir /var/www/html/php
+        create_mysql_user
+        echo -e "<Directory /var/www/html>\n    AllowOverride All\n</Directory>" | sudo tee -a /etc/$APPACHE_CONFIG
+
 
     else
         sudo apt update
-        sudo apt install php php-mysql -y
+        sudo apt install php -y
+        sudo apt install php-mysql -y
         sudo apt install apache2 -y
         sudo apt install mysql-server -y
         sudo mkdir /var/www/html/php
         create_mysql_user
-
+        echo -e "<Directory /var/www/html>\n    AllowOverride All\n</Directory>" | sudo tee -a /etc/$APPACHE_CONFIG
     fi
 }
 
@@ -38,8 +63,9 @@ function  remove_LAMP() {
         if [ -f "/etc/redhat-release" ] # Checks weather RedHat Based Distro
     then
         sudo yum remove php -y
-        sudo yum remove apache2 -y
+        sudo yum remove $APACHE_2_SERVICE -y
         sudo yum remove mysql-server -y
+        sudo rm -rf /var/lib/mysql
     else
         sudo apt purge php -y
         sudo apt purge apache2 -y
@@ -51,9 +77,9 @@ function  remove_LAMP() {
 }
 
 function check_and_install(){
-    command -v mysql &> /dev/null
+    command -v $MYSQL_SERVICE &> /dev/null
     mysql=$?
-    commad -v apache2 &>/dev/null
+    commad -v $APACHE_2_SERVICE &>/dev/null
     apache2=$?
 
     if [ $mysql == 1 ] ||[ $apache2 == 1 ]
@@ -71,16 +97,18 @@ function start_LAMP(){
 
     check_and_install
 
-    msql=$(systemctl is-active mysql)
-    apache=$(systemctl is-active apache2)
+    msql=$(systemctl is-active $MYSQL_SERVICE)
+    apache=$(systemctl is-active $APACHE_2_SERVICE)
 
     if [ "$msql" == "inactive" ]
     then
-        systemctl start mysql
+
+        sudo systemctl start $MYSQL_SERVICE
     fi
+
     if [ "$apache" == "inactive" ]
     then
-        systemctl start apache2
+        sudo systemctl start $APACHE_2_SERVICE
     fi
 }
 
@@ -88,8 +116,8 @@ function start_LAMP(){
 function status(){
     check_and_install
 
-    mysql=$(systemctl is-active mysql)
-    apache=$(systemctl is-active apache2)
+    mysql=$(systemctl is-active $MYSQL_SERVICE)
+    apache=$(systemctl is-active $APACHE_2_SERVICE)
 
     echo Mysql Status : "$mysql"
     echo apache Status : "$apache"
@@ -98,17 +126,17 @@ function status(){
 # It stops the LMAP Stack
 function stop_LAMP(){
 
-    msql=$(systemctl is-active mysql)
-    apache=$(systemctl is-active apache2)
+    msql=$(systemctl is-active $MYSQL_SERVICE)
+    apache=$(systemctl is-active $APACHE_2_SERVICE)
 
     if [ "$msql" == "active" ]
     then
-        systemctl stop mysql
+        sudo systemctl stop $MYSQL_SERVICE
     fi
 
     if [ "$apache" == "active" ]
     then
-        systemctl stop apache2
+        sudo systemctl stop $APACHE_2_SERVICE
     fi
 }
 
@@ -119,7 +147,7 @@ function sample_app(){
     fi
     git clone "$SAMPLE_APP_REPO" "$SAMPLE_APP"
     sudo cp $SAMPLE_APP/mysql-connection.php /var/www/html/php/index.php
-    sudo systemctl restart apache2
+    sudo systemctl restart $APACHE_2_SERVICE
 
 }
 
